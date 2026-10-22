@@ -9,6 +9,7 @@
   var GROUP_AFTER = 3;                 // E 与 1 之间停顿
   var T_OPENING = 2500, T_ASSEMBLE = 2500;
   var KEY_GAP = 800, KEY_JITTER = 90, GROUP_GAP = 320;
+  var HOLD_AFTER_TYPED = 2600;       // 敲完 TRAE1024 后停留 2~3 秒再汇聚展示祝福
   var PHASES = ['LOADING', 'OPENING', 'TYPING', 'ASSEMBLING', 'HERO'];
 
   var STYLES = [
@@ -306,6 +307,7 @@
   }
 
   function enterOpening() {
+    state.started = true;
     state.pointer = 0;
     setPhase('OPENING');
     markNext();
@@ -323,7 +325,7 @@
   function scheduleStrike(delay) { later(function () { strike(state.pointer, true); }, delay); }
 
   function strike(i, auto) {
-    if (state.phase !== 'TYPING') return;
+    if (state.phase !== 'TYPING' || i < 0 || i >= SEQUENCE.length) return;
     var k = SEQUENCE[i], el = keyEls[k];
     el.classList.remove('next');
     el.classList.add('pressed');
@@ -334,7 +336,7 @@
       el.classList.add('lit');
     }, 110);
     state.pointer = i + 1;
-    if (state.pointer >= SEQUENCE.length) { later(enterAssembling, 260); return; }
+    if (state.pointer >= SEQUENCE.length) { later(enterAssembling, HOLD_AFTER_TYPED); return; }
     markNext();
     var gap = KEY_GAP + (Math.random() * 2 - 1) * KEY_JITTER;
     if (i === GROUP_AFTER) gap += GROUP_GAP;
@@ -404,7 +406,7 @@
     if (!immediate && !reduce) setTimeout(function () {
       slots.forEach(function (s) { s.classList.remove('pop'); });
     }, 700);
-    hint('拖拽转动 <b>TRAE1024</b>，滚轮缩放 · <b>R</b> 重播 · <b>1–5</b> 切换画风', 5200);
+    hint('拖拽转动 <b>TRAE1024</b>，滚轮缩放 · <b>Tab</b> 重播 · <b>1–5</b> 切换画风', 5200);
     if (!immediate) Snd.chime();
   }
 
@@ -414,7 +416,7 @@
     resetSlots(); resetKeys();
     $('#fly-layer').innerHTML = '';
     setPhase('LOADING');
-    setTimeout(enterOpening, reduce ? 80 : 420);
+    later(enterOpening, reduce ? 80 : 420);
   }
 
   /* ---------------- HERO 视角拖拽/缩放 ---------------- */
@@ -449,6 +451,7 @@
   });
   function setStyle(i) {
     i = (i + STYLES.length) % STYLES.length;
+    var changed = i !== state.style;
     state.style = i; updateBodyClasses();
     var s = STYLES[i];
     $('#sc-pill').textContent = 'STYLE ' + s.no + ' / 05';
@@ -459,17 +462,26 @@
       b.setAttribute('aria-selected', k === i ? 'true' : 'false');
     });
     if (Fx) Fx.setMode(s.id);
+    /* 切换到不同风格：从按键开始重新播放（初始化 setStyle(0) 不触发） */
+    if (changed && state.started) replay();
   }
   $('#sc-prev').addEventListener('click', function () { setStyle(state.style - 1); });
   $('#sc-next').addEventListener('click', function () { setStyle(state.style + 1); });
 
   /* ---------------- 全局输入 ---------------- */
   document.addEventListener('keydown', function (e) {
+    /* Tab 重播：始终拦截默认焦点跳转，长按自动重复时只拦截不重播 */
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      if (e.repeat) return;
+      Snd.unlock();
+      replay();
+      return;
+    }
     if (e.repeat) return;
     Snd.unlock();
     var k = e.key.toUpperCase();
     if (k === 'M') { syncMute(Snd.toggle()); return; }
-    if (k === 'R') { replay(); return; }
     if (k === 'ARROWLEFT' || k === '[') { setStyle(state.style - 1); return; }
     if (k === 'ARROWRIGHT' || k === ']') { setStyle(state.style + 1); return; }
     if (e.key >= '1' && e.key <= '5') {
@@ -496,7 +508,10 @@
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) { clearTimer(); return; }
     if (state.phase === 'OPENING') later(function () { setPhase('TYPING'); markNext(); scheduleStrike(KEY_GAP - KEY_JITTER); }, 600);
-    else if (state.phase === 'TYPING') scheduleStrike(KEY_GAP);
+    else if (state.phase === 'TYPING') {
+      if (state.pointer >= SEQUENCE.length) later(enterAssembling, 400);
+      else scheduleStrike(KEY_GAP);
+    }
   });
 
   /* ---------------- 启动 / 降级 ---------------- */
