@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>TRAE 1024 · 敲出你的 TRAE1024</title>
+<meta name="description" content="TRAE 1024 程序员日：机械键盘依次敲下 T R A E 1 0 2 4，汇聚成三维 TRAE1024，支持像素 / 低多边形 / 卡通 / 油画 / 水墨五种实时画风。">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="512x512" href="assets/trae-icon.png">
+<link rel="apple-touch-icon" href="assets/trae-icon.png">
+</head>
+<body class="style-pixel phase-loading">
+
+<!-- 风格化后期滤镜（仅作用于三维场景层，UI 控件层恒常） -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <filter id="f-pixel" x="-5%" y="-5%" width="110%" height="110%">
+      <feComponentTransfer color-interpolation-filters="sRGB">
+        <feFuncR type="discrete" tableValues="0 .2 .45 .72 1"/>
+        <feFuncG type="discrete" tableValues="0 .25 .5 .78 1"/>
+        <feFuncB type="discrete" tableValues="0 .18 .4 .62 .85"/>
+      </feComponentTransfer>
+      <feConvolveMatrix order="3" divisor="1.4" kernelMatrix="0 0 0 0 1.15 0 0 0 0"/>
+    </filter>
+    <filter id="f-lowpoly" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.008 0.012" numOctaves="2" seed="26" result="fac"/>
+      <feDisplacementMap in="SourceGraphic" in2="fac" scale="7" xChannelSelector="R" yChannelSelector="G" result="disp"/>
+      <feComponentTransfer in="disp" color-interpolation-filters="sRGB">
+        <feFuncR type="discrete" tableValues="0 .3 .62 1"/>
+        <feFuncG type="discrete" tableValues="0 .34 .66 1"/>
+        <feFuncB type="discrete" tableValues="0 .25 .52 .82"/>
+      </feComponentTransfer>
+    </filter>
+    <filter id="f-toon" x="-5%" y="-5%" width="110%" height="110%">
+      <feComponentTransfer color-interpolation-filters="sRGB">
+        <feFuncR type="discrete" tableValues="0 .22 .55 .85 1"/>
+        <feFuncG type="discrete" tableValues="0 .3 .62 .9 1"/>
+        <feFuncB type="discrete" tableValues="0 .18 .48 .75 1"/>
+      </feComponentTransfer>
+    </filter>
+    <filter id="f-oil" x="-6%" y="-6%" width="112%" height="112%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="0.55" result="soft"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" seed="11" result="brush"/>
+      <feDisplacementMap in="soft" in2="brush" scale="9" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="f-ink" x="-6%" y="-6%" width="112%" height="112%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.035 0.06" numOctaves="3" seed="5" result="dry"/>
+      <feDisplacementMap in="SourceGraphic" in2="dry" scale="6" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+
+<!-- 粒子背景（五风格由 JS 切换渲染模式） -->
+<canvas id="fx" aria-hidden="true"></canvas>
+<div id="grain" aria-hidden="true"></div>
+
+<!-- 三维场景 -->
+<div id="scene">
+  <div id="camera">
+    <div id="board-wrap">
+      <div id="board" aria-label="TRAE 75% 机械键盘">
+        <div id="knob" aria-hidden="true"></div>
+        <div id="keys"></div>
+      </div>
+      <div id="board-shadow" aria-hidden="true"></div>
+    </div>
+    <div id="fly-layer" aria-hidden="true"></div>
+    <div id="hero">
+      <div class="hero-inner">
+        <div id="word" aria-label="TRAE1024"></div>
+        <div class="hero-copy">
+          <h1 id="hero-title">TRAE&nbsp;1024&nbsp;程序员节快乐</h1>
+          <p class="hero-sub" id="hero-sub">To&nbsp;The&nbsp;Real&nbsp;AI&nbsp;Engineer</p>
+          <div class="hero-cta">
+            <a class="btn-primary" href="https://www.trae.cn/" target="_blank" rel="noopener">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+              下载 TRAE
+            </a>
+            <a class="btn-ghost" id="community-btn" href="https://forum.trae.cn/" target="_blank" rel="noopener">官方中文社区</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 顶部品牌栏 -->
+<header id="topbar">
+  <a class="wordmark" href="https://www.trae.cn/" target="_blank" rel="noopener" aria-label="TRAE 官网">
+    <img class="brand-icon" src="assets/trae-mark.png" alt="" width="28" height="20">
+    <span>TRAE</span>
+  </a>
+  <div class="top-right">
+    <span class="datecode" id="datecode">&gt;&gt;date{10.19&nbsp;-&nbsp;10.24}</span>
+    <a class="btn-primary btn-sm" href="https://www.trae.cn/" target="_blank" rel="noopener">下载 TRAE</a>
+  </div>
+</header>
+
+<!-- 操作提示 -->
+<div id="hint" role="status" aria-live="polite"></div>
+
+<!-- 风格切换卡（复刻素材 STYLE 0X / 05） -->
+<aside id="style-card" aria-label="渲染风格切换">
+  <div class="sc-head">
+    <span class="sc-pill" id="sc-pill">STYLE 01 / 05</span>
+    <span class="sc-cn" id="sc-cn">像素风</span>
+    <span class="sc-en" id="sc-en">Pixel art</span>
+  </div>
+  <p class="sc-desc" id="sc-desc"></p>
+  <div class="sc-row">
+    <div class="sc-seg" id="sc-seg" role="tablist" aria-label="五种渲染风格"></div>
+    <div class="sc-nav">
+      <button id="sc-prev" type="button" aria-label="上一种风格">‹</button>
+      <button id="sc-next" type="button" aria-label="下一种风格">›</button>
+    </div>
+  </div>
+</aside>
+
+<!-- 右下控件 -->
+<div id="controls">
+  <button id="btn-replay" type="button" aria-label="重播">
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+  </button>
+  <button id="btn-mute" type="button" aria-label="声音开关" aria-pressed="false">
+    <svg class="ic-snd" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+    <svg class="ic-mut" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M22 9l-6 6M16 9l6 6"/></svg>
+  </button>
+</div>
+
+<!-- 加载态 -->
+<div id="loader">
+  <div class="ld-logo">TRAE</div>
+  <div class="ld-particles" aria-hidden="true"></div>
+  <pre class="ld-code" id="ld-code">// loading scene</pre>
+</div>
+
+<!-- 致命降级态 -->
+<div id="fallback" hidden>
+  <div class="fb-card">
+    <div class="fb-word">TRAE<span>1024</span></div>
+    <p>当前浏览器无法启动三维场景，仍可前往下载 TRAE 或加入官方中文社区。建议使用最新版桌面 Chrome / Edge / Safari 完整体验。</p>
+    <div class="hero-cta">
+      <a class="btn-primary" href="https://www.trae.cn/" target="_blank" rel="noopener">下载 TRAE</a>
+      <a class="btn-ghost" href="https://forum.trae.cn/" target="_blank" rel="noopener">官方中文社区</a>
+      <button class="btn-ghost" id="fb-retry" type="button">重试</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
